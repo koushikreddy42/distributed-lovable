@@ -1,6 +1,7 @@
 package com.distributed_lovable.account_service.service;
 
 import com.distributed_lovable.account_service.dto.subscription.SubscriptionResponse;
+import com.distributed_lovable.common_lib.dto.PlanDto;
 import com.distributed_lovable.common_lib.enums.SubscriptionStatus;
 
 import java.time.Instant;
@@ -17,4 +18,6 @@ public interface SubscriptionService {
     void renewSubscriptionPeriod(String subscriptionId, Instant periodStart, Instant periodEnd);
 
     void markSubscriptionPastDue(String subscriptionId);
+
+    PlanDto getCurrentSubscribedPlanByUser();
 }
