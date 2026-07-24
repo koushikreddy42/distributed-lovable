@@ -6,7 +6,7 @@ spring:
     config.server.git:
       uri: https://github.com/koushikreddy42/lovable-config-server
       username: koushikreddy42
-      password: ${CONFIG_SERVER_GITHUB_TOKEN}
+      password: ${CONFIG_SERVICE_GITHUB_TOKEN}
       default-label: main
 
 server.port: 8888
