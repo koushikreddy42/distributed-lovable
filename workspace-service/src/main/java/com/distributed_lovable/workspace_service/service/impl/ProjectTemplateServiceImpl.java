@@ -1,11 +1,11 @@
 package com.distributed_lovable.workspace_service.service.impl;
 
-import com.koushik.projects.lovable_clone.entity.Project;
-import com.koushik.projects.lovable_clone.entity.ProjectFile;
-import com.koushik.projects.lovable_clone.error.ResourceNotFoundException;
-import com.koushik.projects.lovable_clone.repository.ProjectFileRepository;
-import com.koushik.projects.lovable_clone.repository.ProjectRepository;
-import com.koushik.projects.lovable_clone.service.ProjectTemplateService;
+import com.distributed_lovable.common_lib.error.ResourceNotFoundException;
+import com.distributed_lovable.workspace_service.entity.Project;
+import com.distributed_lovable.workspace_service.entity.ProjectFile;
+import com.distributed_lovable.workspace_service.repository.ProjectFileRepository;
+import com.distributed_lovable.workspace_service.repository.ProjectRepository;
+import com.distributed_lovable.workspace_service.service.ProjectTemplateService;
 import io.minio.*;
 import io.minio.messages.Item;
 import lombok.RequiredArgsConstructor;

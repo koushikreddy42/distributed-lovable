@@ -34,7 +34,7 @@ public class StripePaymentProcessor implements PaymentProcessor {
     private final UserRepository userRepository;
     private final SubscriptionService subscriptionService;
 
-    @Value("${client.url}")
+    @Value("${app.frontend.url}")
     private String frontendUrl;
 
     @Override
