@@ -25,10 +25,10 @@ public class InternalWorkspaceController {
         return projectFileService.getFileContent(projectId, path);
     }
 
-//    @GetMapping("/projects/{projectId}/permissions/check")
-//    public boolean checkProjectPermission(
-//            @PathVariable Long projectId,
-//            @RequestParam ProjectPermission permission) {
-//        return projectService.hasPermission(projectId, permission);
-//    }
+    @GetMapping("/projects/{projectId}/permissions/check")
+    public boolean checkProjectPermission(
+            @PathVariable Long projectId,
+            @RequestParam ProjectPermission permission) {
+        return projectService.hasPermission(projectId, permission);
+    }
 }

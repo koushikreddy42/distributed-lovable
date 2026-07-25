@@ -47,8 +47,6 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     private final UsageService usageService;
     private final WorkspaceClient workspaceClient;
 
-    private static final Pattern FILE_TAG_PATTERN = Pattern.compile("<file path=\"([^\"]+)\">(.*?)</file>", Pattern.DOTALL);
-
     @Override
     @PreAuthorize("@security.canEditProject(#projectId)")
     public Flux<StreamResponse> streamResponse(String userMessage, Long projectId) {

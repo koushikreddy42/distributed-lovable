@@ -12,7 +12,7 @@ public class SecurityExpressions {
     private final ProjectMemberRepository projectMemberRepository;
     private final AuthUtil authUtil;
 
-    private boolean hasPermission(Long projectId, ProjectPermission projectPermission){
+    public boolean hasPermission(Long projectId, ProjectPermission projectPermission){
         Long userId = authUtil.getCurrentUserId();
 
         return projectMemberRepository.findRoleByProjectIdAndUserId(projectId, userId)
