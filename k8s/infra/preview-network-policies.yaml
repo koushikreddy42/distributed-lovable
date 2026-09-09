@@ -13,14 +13,14 @@ spec:
   
   # --- INCOMING TRAFFIC (Ingress) ---
   ingress:
-    # 1. ONLY accept traffic from the lovable-me-proxy
+    # 1. ONLY accept traffic from the lovable-proxy
     - from:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: lovable-core
           podSelector:
             matchLabels:
-              app: lovable-me-proxy
+              app: lovable-proxy
       ports:
         - protocol: TCP
           port: 5173 # Vite dev server port

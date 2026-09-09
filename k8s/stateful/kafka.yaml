@@ -66,8 +66,8 @@ spec:
               value: "6PMpHYL9QkeyXRj9Nrp4KA"
           resources:
             requests:
-              cpu: 250m
-              memory: 512Mi
+              cpu: 100m
+              memory: 256Mi
             limits:
               cpu: 1000m
               memory: 1Gi
