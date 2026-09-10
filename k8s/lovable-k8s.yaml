@@ -1,0 +1,820 @@
+# ==============================================================================
+# RBAC: WORKSPACE SERVICE ACCOUNT & PREVIEW ROLE BINDING
+# ==============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: workspace-service-account
+  namespace: lovable-core
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: preview-manager-role
+  namespace: lovable-previews
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/exec", "pods/log", "pods/status"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: preview-manager-binding
+  namespace: lovable-previews
+subjects:
+  - kind: ServiceAccount
+    name: workspace-service-account
+    namespace: lovable-core
+roleRef:
+  kind: Role
+  name: preview-manager-role
+  apiGroup: rbac.authorization.k8s.io
+
+# ==============================================================================
+# 1. REDIS
+# ==============================================================================
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: lovable-core
+spec:
+  selector:
+    matchLabels:
+      app: redis
+  serviceName: redis
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: standard-rwo
+        resources:
+          requests:
+            storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: lovable-core
+spec:
+  clusterIP: None
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+
+# ==============================================================================
+# 2. MINIO
+# ==============================================================================
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: minio
+  namespace: lovable-core
+spec:
+  selector:
+    matchLabels:
+      app: minio
+  serviceName: minio
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      containers:
+        - name: minio
+          image: minio/minio:latest
+          args: [server, /data, --console-address, ":9001"]
+          ports:
+            - containerPort: 9000
+            - containerPort: 9001
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MINIO_ROOT_USER
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MINIO_ROOT_PASSWORD
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          volumeMounts:
+            - name: minio-data
+              mountPath: /data
+  volumeClaimTemplates:
+    - metadata:
+        name: minio-data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: standard-rwo
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  namespace: lovable-core
+spec:
+  selector:
+    app: minio
+  ports:
+    - name: api
+      port: 9000
+    - name: console
+      port: 9001
+
+# ==============================================================================
+# 3. PGVECTOR (POSTGRESQL 16)
+# ==============================================================================
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pgvector
+  namespace: lovable-core
+spec:
+  selector:
+    matchLabels:
+      app: pgvector
+  serviceName: pgvector
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: pgvector
+    spec:
+      containers:
+        - name: pgvector
+          image: pgvector/pgvector:pg16
+          ports:
+            - containerPort: 5432
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_DB
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: POSTGRES_PASSWORD
+            - name: ACCOUNT_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: ACCOUNT_DB_PASSWORD
+            - name: WORKSPACE_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: WORKSPACE_DB_PASSWORD
+            - name: INTELLIGENCE_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: INTELLIGENCE_DB_PASSWORD
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 512Mi
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data
+            - name: initdb
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: initdb
+          configMap:
+            name: pgvector-init
+            defaultMode: 0755
+  volumeClaimTemplates:
+    - metadata:
+        name: pgdata
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: standard-rwo
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgvector
+  namespace: lovable-core
+spec:
+  clusterIP: None
+  selector:
+    app: pgvector
+  ports:
+    - port: 5432
+
+# ==============================================================================
+# 4. KAFKA (KRAFT MODE)
+# ==============================================================================
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  namespace: lovable-core
+spec:
+  selector:
+    matchLabels:
+      app: kafka
+  serviceName: kafka
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: kafka
+          image: confluentinc/confluent-local:7.5.0
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+          ports:
+            - containerPort: 9092
+              name: plaintext
+            - containerPort: 29093
+              name: controller
+          env:
+            - name: KAFKA_HEAP_OPTS
+              value: "-Xms256M -Xmx384M"
+            - name: KAFKA_LOG4J_ROOT_LOGLEVEL
+              value: "ERROR"
+            - name: KAFKA_LOG4J_LOGGERS
+              value: "kafka=ERROR,org.apache.kafka=ERROR,state.change.logger=ERROR,kafka.controller=ERROR,kafka.coordinator=ERROR,kafka.server=ERROR,kafka.cluster=ERROR,kafka.log=ERROR"
+            - name: KAFKAREST_LOG4J_ROOT_LOGLEVEL
+              value: "ERROR"
+            - name: KAFKA_NODE_ID
+              value: "1"
+            - name: KAFKA_PROCESS_ROLES
+              value: "broker,controller"
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT"
+            - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+              value: "1@kafka-0.kafka.lovable-core.svc.cluster.local:29093"
+            - name: KAFKA_LISTENERS
+              value: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:29092"
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: "PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092"
+            - name: KAFKA_CONTROLLER_LISTENER_NAMES
+              value: "CONTROLLER"
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: "PLAINTEXT"
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
+              value: "0"
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "1"
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "1"
+            - name: CLUSTER_ID
+              value: "6PMpHYL9QkeyXRj9Nrp4KA"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 768Mi
+          volumeMounts:
+            - name: kafka-data
+              mountPath: /var/lib/kafka/data
+  volumeClaimTemplates:
+    - metadata:
+        name: kafka-data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: standard-rwo
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: lovable-core
+spec:
+  clusterIP: None
+  selector:
+    app: kafka
+  ports:
+    - name: plaintext
+      port: 9092
+      targetPort: 9092
+    - name: controller
+      port: 29093
+      targetPort: 29093
+
+# ==============================================================================
+# 5. CONFIG SERVICE
+# ==============================================================================
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: config-service
+  namespace: lovable-core
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: config-service
+  template:
+    metadata:
+      labels:
+        app: config-service
+    spec:
+      containers:
+        - name: config-service
+          image: koushikreddy877/lovable-config-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8888
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:MaxRAMPercentage=75.0 -XX:+UseSerialGC -Xss256k"
+            - name: SPRING_PROFILES_ACTIVE
+              value: k8s
+            - name: GIT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: GIT_USERNAME
+            - name: GIT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: GIT_PASSWORD
+          resources:
+            requests:
+              cpu: 50m
+              memory: 192Mi
+            limits:
+              cpu: 250m
+              memory: 384Mi
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8888
+            initialDelaySeconds: 45
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: config-service
+  namespace: lovable-core
+spec:
+  selector:
+    app: config-service
+  ports:
+    - port: 8888
+      targetPort: 8888
+
+# ==============================================================================
+# 6. API GATEWAY
+# ==============================================================================
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: lovable-core
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+        - name: api-gateway
+          image: koushikreddy877/lovable-api-gateway:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:MaxRAMPercentage=75.0 -XX:+UseSerialGC -Xss256k"
+            - name: SPRING_PROFILES_ACTIVE
+              value: k8s
+            - name: CONFIG_SERVER_URL
+              value: http://config-service.lovable-core.svc.cluster.local:8888
+            - name: SPRING_CLOUD_CONFIG_FAIL_FAST
+              value: "false"
+            - name: SPRING_CLOUD_CONFIG_RETRY_MAX_ATTEMPTS
+              value: "10"
+            - name: SPRING_CLOUD_CONFIG_RETRY_INITIAL_INTERVAL
+              value: "3000"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: JWT_SECRET
+          resources:
+            requests:
+              cpu: 50m
+              memory: 192Mi
+            limits:
+              cpu: 250m
+              memory: 384Mi
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 45
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: lovable-core
+spec:
+  selector:
+    app: api-gateway
+  ports:
+    - port: 80
+      targetPort: 8080
+
+# ==============================================================================
+# 7. ACCOUNT SERVICE
+# ==============================================================================
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: account-service
+  namespace: lovable-core
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: account-service
+  template:
+    metadata:
+      labels:
+        app: account-service
+    spec:
+      containers:
+        - name: account-service
+          image: koushikreddy877/lovable-account-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 9050
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:MaxRAMPercentage=75.0 -XX:+UseSerialGC -Xss256k"
+            - name: SPRING_PROFILES_ACTIVE
+              value: k8s
+            - name: CONFIG_SERVER_URL
+              value: http://config-service.lovable-core.svc.cluster.local:8888
+            - name: SPRING_CLOUD_CONFIG_FAIL_FAST
+              value: "false"
+            - name: SPRING_CLOUD_CONFIG_RETRY_MAX_ATTEMPTS
+              value: "10"
+            - name: SPRING_CLOUD_CONFIG_RETRY_INITIAL_INTERVAL
+              value: "3000"
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: ACCOUNT_DB_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: JWT_SECRET
+            - name: STRIPE_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: STRIPE_API_KEY
+            - name: STRIPE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: STRIPE_WEBHOOK_SECRET
+            - name: FRONTEND_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: lovable-shared-config
+                  key: APP_FRONTEND_URL
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              cpu: 250m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /account/actuator/health
+              port: 9050
+            initialDelaySeconds: 45
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /account/actuator/health
+              port: 9050
+            failureThreshold: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: account-service
+  namespace: lovable-core
+spec:
+  selector:
+    app: account-service
+  ports:
+    - port: 80
+      targetPort: 9050
+
+# ==============================================================================
+# 8. INTELLIGENCE SERVICE
+# ==============================================================================
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: intelligence-service
+  namespace: lovable-core
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: intelligence-service
+  template:
+    metadata:
+      labels:
+        app: intelligence-service
+    spec:
+      containers:
+        - name: intelligence-service
+          image: koushikreddy877/lovable-intelligence-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 9030
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:MaxRAMPercentage=75.0 -XX:+UseSerialGC -Xss256k"
+            - name: SPRING_PROFILES_ACTIVE
+              value: k8s
+            - name: CONFIG_SERVER_URL
+              value: http://config-service.lovable-core.svc.cluster.local:8888
+            - name: SPRING_CLOUD_CONFIG_FAIL_FAST
+              value: "false"
+            - name: SPRING_CLOUD_CONFIG_RETRY_MAX_ATTEMPTS
+              value: "10"
+            - name: SPRING_CLOUD_CONFIG_RETRY_INITIAL_INTERVAL
+              value: "3000"
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: INTELLIGENCE_DB_PASSWORD
+            - name: AI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: AI_API_KEY
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: JWT_SECRET
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              cpu: 250m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /intelligence/actuator/health
+              port: 9030
+            initialDelaySeconds: 45
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /intelligence/actuator/health
+              port: 9030
+            failureThreshold: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: intelligence-service
+  namespace: lovable-core
+spec:
+  selector:
+    app: intelligence-service
+  ports:
+    - port: 80
+      targetPort: 9030
+
+# ==============================================================================
+# 9. WORKSPACE SERVICE
+# ==============================================================================
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workspace-service
+  namespace: lovable-core
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: workspace-service
+  template:
+    metadata:
+      labels:
+        app: workspace-service
+    spec:
+      serviceAccountName: workspace-service-account
+      containers:
+        - name: workspace-service
+          image: koushikreddy877/lovable-workspace-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 9020
+          envFrom:
+            - configMapRef:
+                name: lovable-shared-config
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:MaxRAMPercentage=75.0 -XX:+UseSerialGC -Xss256k"
+            - name: SPRING_PROFILES_ACTIVE
+              value: k8s
+            - name: CONFIG_SERVER_URL
+              value: http://config-service.lovable-core.svc.cluster.local:8888
+            - name: SPRING_CLOUD_CONFIG_FAIL_FAST
+              value: "false"
+            - name: SPRING_CLOUD_CONFIG_RETRY_MAX_ATTEMPTS
+              value: "10"
+            - name: SPRING_CLOUD_CONFIG_RETRY_INITIAL_INTERVAL
+              value: "3000"
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: WORKSPACE_DB_PASSWORD
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MINIO_ROOT_USER
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: MINIO_ROOT_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: JWT_SECRET
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              cpu: 250m
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /workspace/actuator/health
+              port: 9020
+            initialDelaySeconds: 45
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /workspace/actuator/health
+              port: 9020
+            failureThreshold: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: workspace-service
+  namespace: lovable-core
+spec:
+  selector:
+    app: workspace-service
+  ports:
+    - port: 80
+      targetPort: 9020
+
+# first run infra/namespaces.yml
+# also create the secrets using the .env file in both namespaces by following commands
+# k create secret generic app-secrets --from-env-file=.env -n lovable-core
+# k create secret generic app-secrets --from-env-file=.env -n lovable-previews
+
+#  kubectl create configmap pgvector-init -n lovable-core --from-file=init.sh=<(cat <<'EOF'
+#  #!/bin/bash
+#  set -e
+#
+#  psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
+#  CREATE DATABASE account_db;
+#  CREATE DATABASE workspace_db;
+#  CREATE DATABASE intelligence_db;
+#
+#  CREATE USER account_user WITH PASSWORD '$ACCOUNT_DB_PASSWORD';
+#  CREATE USER workspace_user WITH PASSWORD '$WORKSPACE_DB_PASSWORD';
+#  CREATE USER intelligence_user WITH PASSWORD '$INTELLIGENCE_DB_PASSWORD';
+#
+#  GRANT ALL PRIVILEGES ON DATABASE account_db TO account_user;
+#  GRANT ALL PRIVILEGES ON DATABASE workspace_db TO workspace_user;
+#  GRANT ALL PRIVILEGES ON DATABASE intelligence_db TO intelligence_user;
+#  EOSQL
+#
+#  psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "account_db" <<-EOSQL
+#  GRANT ALL ON SCHEMA public TO account_user;
+#  EOSQL
+#
+#  psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "workspace_db" <<-EOSQL
+#  GRANT ALL ON SCHEMA public TO workspace_user;
+#  EOSQL
+#
+#  psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "intelligence_db" <<-EOSQL
+#  GRANT ALL ON SCHEMA public TO intelligence_user;
+#  EOSQL
+#  EOF
+#  )
+
+# Before running ingress.yaml make sure to install nginx on our kubernetes server
+# Run this command: kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.2/deploy/static/provider/cloud/deploy.yaml
+# Run this to know the public ip address: k get svc ingress-nginx-controller -n ingress-nginx -w

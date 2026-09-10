@@ -3,21 +3,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: lovable-me-proxy
+  name: lovable-proxy
   namespace: lovable-core
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: lovable-me-proxy
+      app: lovable-proxy
   template:
     metadata:
       labels:
-        app: lovable-me-proxy
+        app: lovable-proxy
     spec:
       containers:
-        - name: lovable-me-proxy
-          image: anuj55149/lovable-me-proxy:latest
+        - name: lovable-proxy
+          image: koushikreddy877/lovable-proxy:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 80
@@ -40,11 +40,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: lovable-me-proxy
+  name: lovable-proxy
   namespace: lovable-core
 spec:
   selector:
-    app: lovable-me-proxy
+    app: lovable-proxy
   ports:
     - port: 80
       targetPort: 80
