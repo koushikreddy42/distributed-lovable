@@ -19,6 +19,7 @@ management:
   health:
     config:
       enabled: false
+
 ---
 
 spring:
