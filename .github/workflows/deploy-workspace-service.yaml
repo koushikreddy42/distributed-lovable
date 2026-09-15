@@ -3,7 +3,7 @@ name: Deploy Workspace Service
 on:
   push:
     branches:
-      - master
+      - main
     paths:
       - 'workspace-service/**'
 

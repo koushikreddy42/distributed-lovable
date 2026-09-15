@@ -3,7 +3,7 @@ name: Deploy Intelligence Service
 on:
   push:
     branches:
-      - master
+      - main
     paths:
       - 'intelligence-service/**'
 
