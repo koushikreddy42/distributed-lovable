@@ -43,42 +43,6 @@ The API Gateway validates client JWTs and routes traffic to the Account, Workspa
 
 The Intelligence Service gathers workspace context, invokes OpenAI through Spring AI, streams generated output, parses file/tool instructions, records usage, and publishes file update events. The Workspace Service persists files to MinIO and manages preview pod lifecycle through the Kubernetes API.
 
-### Runtime topology
-
-```mermaid
-flowchart LR
-    Browser[Frontend] --> Ingress[NGINX Ingress]
-    Ingress --> Gateway[API Gateway]
-
-    Gateway --> Account[Account Service]
-    Gateway --> Workspace[Workspace Service]
-    Gateway --> AI[Intelligence Service]
-
-    Account --> AccountDB[(Account PostgreSQL data)]
-    Workspace --> WorkspaceDB[(Workspace PostgreSQL data)]
-    Workspace --> MinIO[(MinIO project files)]
-    Workspace --> K8s[Kubernetes API]
-    Workspace --> Redis[(Redis preview routes)]
-    AI --> AI_DB[(Chat and usage data)]
-    AI --> Model[OpenAI via Spring AI]
-
-    Workspace -. Feign + JWT .-> Account
-    AI -. Feign + JWT .-> Account
-    AI -. Feign + JWT .-> Workspace
-    Workspace --> Kafka[Kafka events]
-
-    Config[Config Service] --> Git[(Git-backed configuration)]
-    Discovery[Discovery Service / Eureka] -. service discovery .-> Gateway
-    Discovery -. service discovery .-> Account
-    Discovery -. service discovery .-> Workspace
-    Discovery -. service discovery .-> AI
-
-    Preview[Preview workloads] --> PreviewNS[lovable-previews namespace]
-    PreviewNS --> Redis
-    PreviewProxy[Preview Proxy] --> PreviewNS
-    Ingress --> PreviewProxy
-```
-
 ### Core request lifecycle
 
 1. A client sends a request to the API Gateway through NGINX Ingress.
