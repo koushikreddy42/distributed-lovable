@@ -8,7 +8,7 @@ The project is built to demonstrate the engineering required beyond an AI prompt
 
 ## Demo Walkthrough
 
-https://github.com/user-attachments/assets/d3a02989-d61d-41ce-a620-3511658ec6da
+https://github.com/user-attachments/assets/bbc0166e-52d9-4dff-bb3e-baef8e797200
 
 ## Why this architecture
 
