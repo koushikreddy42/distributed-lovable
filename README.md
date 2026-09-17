@@ -1,8 +1,8 @@
 # Distributed Lovable
 
-> A production-oriented backend for building, deploying, and iterating on applications with AI.
+> A production-oriented backend for generating, deploying, and iterating on frontend applications with AI.
 
-Distributed Lovable is a Spring-based microservice platform that turns natural-language prompts into project files and runnable previews. It combines authentication, billing, project and file management, AI-assisted code generation, asynchronous events, and Kubernetes preview environments behind a single API gateway.
+Distributed Lovable is a Spring-based microservice platform for generating frontend web applications from natural-language prompts. It turns those prompts into project files and runnable previews, while combining authentication, billing, project and file management, AI-assisted code generation, asynchronous events, and Kubernetes preview environments behind a single API gateway.
 
 The project is built to demonstrate the engineering required beyond an AI prompt box: service boundaries, independent data ownership, JWT propagation, authorization, streaming responses, externalized configuration, cloud deployment, and isolated preview infrastructure.
 
@@ -16,7 +16,7 @@ The platform separates responsibilities instead of turning the entire product in
 
 - **Account Service** owns identity, plans, subscriptions, and Stripe billing.
 - **Workspace Service** owns projects, members, files, deployments, and preview orchestration.
-- **Intelligence Service** owns AI conversations, context gathering, code generation, parsing, and usage tracking.
+- **Intelligence Service** owns AI conversations, frontend code generation, context gathering, parsing, and usage tracking.
 - **API Gateway** is the public edge for routing, CORS, and JWT validation.
 - **Config Service** loads environment-specific configuration from a Git repository.
 - **Discovery Service** provides Eureka-based service registration and discovery.
@@ -45,7 +45,7 @@ The public entry points are separated by hostname:
 
 The API Gateway validates client JWTs and routes traffic to the Account, Workspace, and Intelligence services. Each backend service validates the token independently, and Feign calls forward the authenticated context between services.
 
-The Intelligence Service gathers workspace context, invokes OpenAI through Spring AI, streams generated output, parses file/tool instructions, records usage, and publishes file update events. The Workspace Service persists files to MinIO and manages preview pod lifecycle through the Kubernetes API.
+The Intelligence Service gathers workspace context, invokes OpenAI through Spring AI, streams frontend application code, parses file/tool instructions, records usage, and publishes file update events. The Workspace Service persists the generated application files to MinIO and manages preview pod lifecycle through the Kubernetes API.
 
 ### Core request lifecycle
 
@@ -65,7 +65,7 @@ The Intelligence Service gathers workspace context, invokes OpenAI through Sprin
 | `api-gateway` | Public API boundary, routing, CORS, edge JWT validation | Spring Cloud Gateway, Eureka |
 | `account-service` | Signup, login, users, plans, subscriptions, Stripe | PostgreSQL, Stripe, JWT |
 | `workspace-service` | Projects, members, file tree, file content, deployments | PostgreSQL, MinIO, Redis, Kubernetes API, Feign |
-| `intellijence-service` | Streaming AI chat, context, code generation, parsing, usage | PostgreSQL, Spring AI/OpenAI, Feign, Kafka |
+| `intellijence-service` | Streaming AI chat, frontend code generation, context, parsing, usage | PostgreSQL, Spring AI/OpenAI, Feign, Kafka |
 | `config-service` | Git-backed centralized configuration | Spring Cloud Config Server, GitHub |
 | `discovery-service` | Service registration and discovery | Eureka Server |
 | `common-lib` | Shared JWT security, DTOs, events, enums, Feign auth propagation | Spring Security, OpenFeign |
