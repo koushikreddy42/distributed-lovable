@@ -6,6 +6,10 @@ Distributed Lovable is a Spring-based microservice platform that turns natural-l
 
 The project is built to demonstrate the engineering required beyond an AI prompt box: service boundaries, independent data ownership, JWT propagation, authorization, streaming responses, externalized configuration, cloud deployment, and isolated preview infrastructure.
 
+## Demo Walkthrough
+
+https://github.com/user-attachments/assets/d3a02989-d61d-41ce-a620-3511658ec6da
+
 ## Why this architecture
 
 The platform separates responsibilities instead of turning the entire product into one deployable application:
